@@ -10,6 +10,7 @@ let socket: Socket;
 export default function HiveMind() {
   const { users, consensus, setUsers, setConsensus, reset } = useHiveStore();
   const [joined, setJoined] = useState(false);
+  const [myVote, setMyVote] = useState<string | null>(null);
   const options = ["Option A", "Option B", "Option C"];
 
   useEffect(() => {
@@ -69,8 +70,11 @@ export default function HiveMind() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.5 }}
-                    onClick={() => socket.emit("cast-vote", { roomId: "main-room", vote: opt })}
-                    className={`p-10 rounded-2xl cursor-pointer border-2 transition-all ${consensus === opt ? 'border-green-400 bg-green-400/10 shadow-[0_0_40px_rgba(74,222,128,0.2)]' : 'border-slate-800 bg-slate-900/50 hover:border-blue-500'}`}
+                    onClick={() => {
+                      setMyVote(opt);
+                      socket.emit("cast-vote", { roomId: "main-room", vote: opt });
+                    }}
+                    className={`p-10 rounded-2xl cursor-pointer border-2 transition-all ${consensus === opt ? 'border-green-400 bg-green-400/10 shadow-[0_0_40px_rgba(74,222,128,0.2)]' : myVote === opt ? 'border-blue-400 bg-blue-500/20' : 'border-slate-800 bg-slate-900/50 hover:border-blue-500'}`}
                   >
                     <h3 className="text-xl font-bold">{opt}</h3>
                   </motion.div>
