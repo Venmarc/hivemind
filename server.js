@@ -15,6 +15,14 @@ app.prepare().then(() => {
     const rooms = new Map();
 
     io.on("connection", (socket) => {
+        socket.on("check-room-code", ({ roomId }, callback) => {
+            if (rooms.has(roomId)) {
+                callback({ isTaken: true });
+            } else {
+                callback({ isTaken: false });
+            }
+        });
+
         socket.on("join-room", ({ roomId, userName, isHost, initials }) => {
             socket.join(roomId);
 

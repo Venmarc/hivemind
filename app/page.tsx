@@ -92,10 +92,23 @@ export default function HiveMindApp() {
     setTimeout(() => setShowToast(false), 2000);
   };
 
-  const handleCreateRoom = () => {
+  const handleCreateRoom = async () => {
     if (!myName.trim()) return alert("Enter your name");
     setIsHost(true);
-    const newRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+
+    let newRoomCode = "";
+    let isTaken = true;
+
+    // Loop until we find a unique room code
+    while (isTaken) {
+      newRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      isTaken = await new Promise((resolve) => {
+        socket.emit("check-room-code", { roomId: newRoomCode }, (response: { isTaken: boolean }) => {
+          resolve(response.isTaken);
+        });
+      });
+    }
+
     setRoomCode(newRoomCode);
     setPhase('waiting');
     socket.emit("join-room", { roomId: newRoomCode, userName: myName, isHost: true, initials: myName.substring(0, 2).toUpperCase() });
