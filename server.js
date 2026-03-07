@@ -15,7 +15,7 @@ app.prepare().then(() => {
     const rooms = new Map();
 
     io.on("connection", (socket) => {
-        socket.on("join-room", ({ roomId, userName }) => {
+        socket.on("join-room", ({ roomId, userName, isHost, initials }) => {
             socket.join(roomId);
 
             if (!rooms.has(roomId)) {
@@ -23,9 +23,19 @@ app.prepare().then(() => {
             }
 
             const room = rooms.get(roomId);
-            room.users.push({ id: socket.id, name: userName, vote: null });
+            room.users.push({ id: socket.id, name: userName, vote: null, isHost: !!isHost, initials: initials || userName.substring(0, 2).toUpperCase() });
 
             io.to(roomId).emit("room-update", room.users);
+        });
+
+        socket.on("start-voting", ({ roomId }) => {
+            io.to(roomId).emit("phase-change", "voting");
+        });
+
+        socket.on("chat-message", ({ roomId, message }) => {
+            // broadcast to everyone in the room (including sender, or sender can render locally and use socket.broadcast)
+            // Here we use broadcast to send to others
+            socket.to(roomId).emit("chat-message", message);
         });
 
         socket.on("cast-vote", ({ roomId, vote }) => {

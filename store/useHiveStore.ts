@@ -4,6 +4,8 @@ export interface HiveUser {
   id: string;
   name: string;
   vote: string | null;
+  isHost?: boolean;
+  initials?: string;
 }
 
 interface HiveState {

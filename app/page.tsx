@@ -19,7 +19,7 @@ type AppPhase = 'home' | 'waiting' | 'voting' | 'consensus';
 type ExtendedUser = HiveUser & { isHost?: boolean; initials: string };
 
 export default function HiveMindApp() {
-  const { consensus, setUsers, setConsensus, reset } = useHiveStore();
+  const { users, consensus, setUsers, setConsensus, reset } = useHiveStore();
 
   // App Phase & State
   const [phase, setPhase] = useState<AppPhase>('home');
@@ -51,13 +51,18 @@ export default function HiveMindApp() {
   ]);
 
   // --- Real-time Hooks ---
-  // (Future Socket integration will sync the `users` array from useHiveStore here)
   useEffect(() => {
     socket = io();
     socket.on("room-update", (updatedUsers: HiveUser[]) => setUsers(updatedUsers));
     socket.on("consensus-reached", (winner: string) => {
       setConsensus(winner);
       setPhase('consensus');
+    });
+    socket.on("phase-change", (newPhase: AppPhase) => {
+      setPhase(newPhase);
+    });
+    socket.on("chat-message", (msg) => {
+      setMessages(prev => [...prev, msg]);
     });
     return () => { socket.disconnect(); };
   }, [setUsers, setConsensus]);
@@ -71,12 +76,12 @@ export default function HiveMindApp() {
   }, [phase, consensus]);
 
   // --- User Merging ---
-  // Currently simulating joined users via local state.
-  // In the future, this will map from the Socket store's `users` state instead.
-  const myUser: ExtendedUser = { id: "me", name: myName || "User", vote: myVote, isHost, initials: (myName || "U").substring(0, 2).toUpperCase() };
+  // The global store holds the canonical `users` array sent by Socket.io from the backend server.
+  const displayUsers: ExtendedUser[] = phase === 'home' ? [] : users.map(u => ({
+    ...u,
+    initials: u.initials || u.name.substring(0, 2).toUpperCase()
+  }));
 
-  // To test multiple users visually later, you can push mock objects into `displayUsers` here.
-  const displayUsers: ExtendedUser[] = phase === 'home' ? [] : [myUser];
   const MAX_USERS = 10;
   const allVoted = displayUsers.length > 0 && displayUsers.every(u => u.vote !== null);
 
@@ -90,19 +95,26 @@ export default function HiveMindApp() {
   const handleCreateRoom = () => {
     if (!myName.trim()) return alert("Enter your name");
     setIsHost(true);
-    setRoomCode(Math.random().toString(36).substring(2, 8).toUpperCase());
+    const newRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+    setRoomCode(newRoomCode);
     setPhase('waiting');
+    socket.emit("join-room", { roomId: newRoomCode, userName: myName, isHost: true, initials: myName.substring(0, 2).toUpperCase() });
   };
 
   const handleJoinRoom = () => {
     if (!myName.trim()) return alert("Enter your name");
     if (!joinCode.trim()) return alert("Enter room code");
     setIsHost(false);
-    setRoomCode(joinCode.toUpperCase());
+    const code = joinCode.toUpperCase();
+    setRoomCode(code);
     setPhase('waiting');
+    socket.emit("join-room", { roomId: code, userName: myName, isHost: false, initials: myName.substring(0, 2).toUpperCase() });
   };
 
-  const startVoting = () => setPhase('voting');
+  const startVoting = () => {
+    setPhase('voting');
+    socket.emit("start-voting", { roomId: roomCode });
+  };
 
   const handleVeto = (e: React.MouseEvent, title: string) => {
     e.stopPropagation();
@@ -185,7 +197,7 @@ export default function HiveMindApp() {
 
             <div className="flex flex-col gap-4">
               {displayUsers.map(u => {
-                const isMe = u.id === 'me';
+                const isMe = u.id === socket?.id;
                 return (
                   <div key={u.id} className="flex items-center justify-between p-3 bg-black/30 rounded-xl border border-white/5">
                     <div className="flex items-center gap-3">
@@ -262,16 +274,24 @@ export default function HiveMindApp() {
     const handleSendMessage = (e?: React.FormEvent) => {
       e?.preventDefault();
       if (!chatMessage.trim()) return;
+
       const newMsg = {
         id: Date.now(),
         text: chatMessage,
         sender: myName || "Me",
-        isMe: true,
-        initials: myUser.initials,
+        isMe: true, // Local render
+        initials: myName.substring(0, 2).toUpperCase() || "ME",
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
+
       setMessages([...messages, newMsg]);
       setChatMessage("");
+
+      // Broadcast to others (server will set isMe false for recipients via our payload tweak)
+      socket.emit("chat-message", {
+        roomId: roomCode,
+        message: { ...newMsg, isMe: false }
+      });
     };
 
     return (
@@ -426,7 +446,7 @@ export default function HiveMindApp() {
             <div className="flex flex-wrap justify-center gap-3 md:gap-4 mb-10 w-full max-w-full">
               <AnimatePresence>
                 {displayUsers.map((u, i) => {
-                  const isMe = u.id === 'me';
+                  const isMe = u.id === socket?.id;
                   return (
                     <motion.div
                       key={u.id}
@@ -514,7 +534,7 @@ export default function HiveMindApp() {
             {/* Desktop Avatars */}
             <div className="hidden md:flex flex-wrap items-center gap-3">
               {displayUsers.map((u) => {
-                const isMe = u.id === 'me';
+                const isMe = u.id === socket?.id;
                 return (
                   <div key={u.id} className="relative group cursor-help">
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold bg-hive-card border-2 transition-colors 
@@ -534,7 +554,7 @@ export default function HiveMindApp() {
             {/* Mobile Avatars */}
             <div className="flex md:hidden items-center gap-2">
               {displayUsers.slice(0, 4).map((u) => {
-                const isMe = u.id === 'me';
+                const isMe = u.id === socket?.id;
                 return (
                   <div key={u.id} className="relative group">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold bg-hive-card border-2 transition-colors 
@@ -593,7 +613,7 @@ export default function HiveMindApp() {
                     onClick={() => {
                       if (isVetoed) return;
                       setMyVote(opt.title);
-                      // socket.emit("cast-vote", { roomId: roomCode, vote: opt.title });
+                      socket.emit("cast-vote", { roomId: roomCode, vote: opt.title });
                     }}
                     className={`
                       relative p-8 rounded-2xl cursor-pointer border-2 transition-all flex flex-col justify-between min-h-[220px] overflow-hidden group
