@@ -1,10 +1,12 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-hive-bg: #111111;
-  --color-hive-card: #1a1a1a;
+  --color-hive-bg: #1f0a0a;
+  --color-hive-card: #2a0f0f;
   --color-hive-red-base: #e63946;
   --color-hive-red-neon: #ff0033;
+  --color-hive-yellow-base: #ffdd00;
+  --color-hive-yellow-neon: #ffea00;
   --color-hive-green-base: #00ff9d;
   --color-hive-green-neon: #39ff14;
 }
