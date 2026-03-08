@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useHiveStore, HiveUser } from '../store/useHiveStore';
@@ -30,7 +30,7 @@ export default function HiveMindApp() {
   const [showJoinInput, setShowJoinInput] = useState(false);
 
   // Room State
-  const [roomCode, setRoomCode] = useState("MAIN-77");
+  const [roomCode, setRoomCode] = useState("");
   const [timeLeft, setTimeLeft] = useState(180);
 
   // UI States
@@ -38,17 +38,39 @@ export default function HiveMindApp() {
   const [showModal, setShowModal] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
 
-  // Veto States (Anonymous Client-side Logic)
+  // Veto States (Server-synced)
   const [hasVetoed, setHasVetoed] = useState(false);
   const [vetoedOption, setVetoedOption] = useState<string | null>(null);
 
   // Chat States
   const [chatMessage, setChatMessage] = useState("");
-  const [messages, setMessages] = useState([
-    { id: 1, text: "Vetoing B – nuts allergy", sender: "Guest", isMe: false, initials: "GU", time: "12:01" },
-    { id: 2, text: "Option C has great reviews", sender: "PC", isMe: false, initials: "PC", time: "12:03" },
-    { id: 3, text: "Let's go with A", sender: "Unknown", isMe: false, initials: "UN", time: "12:05" },
-  ]);
+  const [messages, setMessages] = useState<{ id: number; text: string; sender: string; isMe: boolean; initials: string; time: string }[]>([]);
+
+  // --- Utilities ---
+  const leaveHive = React.useCallback(() => {
+    reset();
+    setPhase('home');
+    setMyVote(null);
+    setIsHost(false);
+    setMyName("");
+    setHasVetoed(false);
+    setVetoedOption(null);
+    setRoomCode("");
+    setMessages([]);
+    setTimeLeft(180);
+  }, [reset]);
+
+  const formatTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min}:${sec.toString().padStart(2, '0')}`;
+  };
+
+  const copyRoomCode = () => {
+    navigator.clipboard.writeText(roomCode);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2000);
+  };
 
   // --- Real-time Hooks ---
   useEffect(() => {
@@ -64,16 +86,34 @@ export default function HiveMindApp() {
     socket.on("chat-message", (msg) => {
       setMessages(prev => [...prev, msg]);
     });
+    socket.on("chat-history", (history) => {
+      setMessages(history);
+    });
+    socket.on("state-sync", (state) => {
+      setPhase(state.phase);
+      setTimeLeft(state.timeLeft);
+      setVetoedOption(state.vetoedOption);
+    });
+    socket.on("timer-update", (newTime) => {
+      setTimeLeft(newTime);
+    });
+    socket.on("timer-expired", () => {
+      // Server now sends consensus-reached with winner, but keeping this as backup
+      setPhase('consensus');
+    });
+    socket.on("veto-applied", (optionTitle) => {
+      setVetoedOption(optionTitle);
+      // Local state update: if I was voting for this, clear it
+      setMyVote(prev => prev === optionTitle ? null : prev);
+    });
+    socket.on("room-closed", () => {
+      alert("The host has left or the room was closed.");
+      leaveHive();
+    });
     return () => { socket.disconnect(); };
-  }, [setUsers, setConsensus]);
+  }, [setUsers, setConsensus, leaveHive]);
 
-  useEffect(() => {
-    if (phase !== 'voting' || consensus) return;
-    const interval = setInterval(() => {
-      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [phase, consensus]);
+
 
   // --- User Merging ---
   // The global store holds the canonical `users` array sent by Socket.io from the backend server.
@@ -85,13 +125,7 @@ export default function HiveMindApp() {
   const MAX_USERS = 10;
   const allVoted = displayUsers.length > 0 && displayUsers.every(u => u.vote !== null);
 
-  // --- Utilities ---
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(roomCode);
-    setShowToast(true);
-    setTimeout(() => setShowToast(false), 2000);
-  };
-
+  // --- Actions ---
   const handleCreateRoom = async () => {
     if (!myName.trim()) return alert("Enter your name");
     setIsHost(true);
@@ -135,24 +169,9 @@ export default function HiveMindApp() {
     if (window.confirm("Veto this option? (one-time use)")) {
       setHasVetoed(true);
       setVetoedOption(title);
+      socket.emit("veto-option", { roomId: roomCode, optionTitle: title });
       if (myVote === title) setMyVote(null);
     }
-  };
-
-  const leaveHive = () => {
-    reset();
-    setPhase('home');
-    setMyVote(null);
-    setIsHost(false);
-    setMyName("");
-    setHasVetoed(false);
-    setVetoedOption(null);
-  };
-
-  const formatTime = (seconds: number) => {
-    const min = Math.floor(seconds / 60);
-    const sec = seconds % 60;
-    return `${min}:${sec.toString().padStart(2, '0')}`;
   };
 
   // --- Render Functions ---
