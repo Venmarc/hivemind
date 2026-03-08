@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useHiveStore, HiveUser } from '../store/useHiveStore';
@@ -47,7 +47,7 @@ export default function HiveMindApp() {
   const [messages, setMessages] = useState<{ id: number; text: string; sender: string; isMe: boolean; initials: string; time: string }[]>([]);
 
   // --- Utilities ---
-  const leaveHive = React.useCallback(() => {
+  const leaveHive = useCallback(() => {
     reset();
     setPhase('home');
     setMyVote(null);
