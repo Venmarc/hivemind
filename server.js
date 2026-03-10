@@ -136,7 +136,23 @@ app.prepare().then(() => {
             rooms.forEach((room, roomId) => {
                 const userIndex = room.users.findIndex((u) => u.id === socket.id);
                 if (userIndex !== -1) {
-                    const wasHost = room.users[userIndex].isHost;
+                    const leavingUser = room.users[userIndex];
+                    const wasHost = leavingUser.isHost;
+
+                    // Add system message if leaving during an active session
+                    if (room.phase !== 'waiting' && !wasHost) {
+                        const systemMessage = {
+                            id: Date.now() + Math.random(),
+                            text: `${leavingUser.name} left the hive`,
+                            sender: "System",
+                            isMe: false,
+                            initials: "SY",
+                            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        };
+                        room.messages.push(systemMessage);
+                        io.to(roomId).emit("chat-message", systemMessage);
+                    }
+
                     room.users.splice(userIndex, 1);
 
                     if (wasHost || room.users.length === 0) {

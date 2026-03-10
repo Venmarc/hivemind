@@ -48,6 +48,7 @@ export default function HiveMindApp() {
 
   // --- Utilities ---
   const leaveHive = useCallback(() => {
+    socket?.disconnect();
     reset();
     setPhase('home');
     setMyVote(null);
@@ -356,30 +357,41 @@ export default function HiveMindApp() {
           </div>
 
           <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-4 scrollbar-thin scrollbar-thumb-hive-red-neon/30 hover:scrollbar-thumb-hive-red-neon/50">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex gap-3 max-w-[85%] ${msg.isMe ? 'self-end flex-row-reverse' : 'self-start'}`}>
-                <div className={`
-                  w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold border
-                  ${msg.isMe ? 'bg-hive-yellow-base/10 border-hive-yellow-base text-hive-yellow-base' : 'bg-black/50 border-white/20 text-gray-300'}
-                `}>
-                  {msg.initials}
-                </div>
-                <div className="flex flex-col">
-                  <div className={`flex items-baseline gap-2 mb-1 ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                    <span className={`text-[10px] uppercase tracking-wider font-bold ${msg.isMe ? 'text-hive-yellow-base' : 'text-gray-400'}`}>
-                      {msg.sender}
-                    </span>
-                    <span className="text-[9px] text-gray-500 font-mono">{msg.time}</span>
+            {messages.map((msg) => {
+              if (msg.sender === "System") {
+                return (
+                  <div key={msg.id} className="flex flex-col items-center my-2 w-full animate-in fade-in zoom-in-95 duration-500">
+                    <div className="text-[10px] text-gray-400 font-mono uppercase tracking-widest bg-black/40 px-3 py-0.5 rounded-full border border-white/5 shadow-inner">
+                      {msg.text}
+                    </div>
                   </div>
+                );
+              }
+              return (
+                <div key={msg.id} className={`flex gap-3 max-w-[85%] ${msg.isMe ? 'self-end flex-row-reverse' : 'self-start'}`}>
                   <div className={`
-                    p-3 rounded-2xl text-sm leading-relaxed
-                    ${msg.isMe ? 'bg-hive-yellow-base text-black rounded-tr-sm shadow-[0_2px_10px_rgba(255,221,0,0.2)]' : 'bg-black/40 text-gray-200 border border-white/5 rounded-tl-sm'}
+                    w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold border
+                    ${msg.isMe ? 'bg-hive-yellow-base/10 border-hive-yellow-base text-hive-yellow-base' : 'bg-black/50 border-white/20 text-gray-300'}
                   `}>
-                    {msg.text}
+                    {msg.initials}
+                  </div>
+                  <div className="flex flex-col">
+                    <div className={`flex items-baseline gap-2 mb-1 ${msg.isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <span className={`text-[10px] uppercase tracking-wider font-bold ${msg.isMe ? 'text-hive-yellow-base' : 'text-gray-400'}`}>
+                        {msg.sender}
+                      </span>
+                      <span className="text-[9px] text-gray-500 font-mono">{msg.time}</span>
+                    </div>
+                    <div className={`
+                      p-3 rounded-2xl text-sm leading-relaxed
+                      ${msg.isMe ? 'bg-hive-yellow-base text-black rounded-tr-sm shadow-[0_2px_10px_rgba(255,221,0,0.2)]' : 'bg-black/40 text-gray-200 border border-white/5 rounded-tl-sm'}
+                    `}>
+                      {msg.text}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="p-4 border-t border-hive-yellow-base/10 bg-hive-card/80 backdrop-blur">
